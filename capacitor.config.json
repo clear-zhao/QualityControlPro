@@ -1,8 +1,7 @@
 {
-  "appId": "com.chengdu.qcsystem",
-  "appName": "成都通信质量控制",
+  "appId": "com.crsc.crcef",
+  "appName": "成通检验",
   "webDir": "dist",
-  "bundledWebRuntime": false,
   "server": {
     "androidScheme": "https"
   },
