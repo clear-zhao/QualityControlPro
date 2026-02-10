@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ProductionOrder, SubmissionType, AuditStatus, InspectionRecord, UserRole, TerminalSample, User, CrimpingTool, TerminalSpec, WireSpec, PullForceStandard } from '../../types';
 import { CreateOrder } from './CreateOrder';
 import { Card } from '../../components/Card';
+import { Select } from '../../components/Select'; 
 import { api } from '../../services/api'; 
 
 interface CrimpingDashboardProps {
@@ -63,6 +64,10 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
   };
 
   const handleAddRecord = async (orderId: string, type: SubmissionType) => {
+    // 查找当前订单以获取当前工具
+    const currentOrder = orders.find(o => o.id === orderId);
+    if (!currentOrder) return;
+
     const initialSamples: TerminalSample[] = [
         { id: 0, sampleIndex: 1, measuredForce: 0, isPassed: false }, 
         { id: 0, sampleIndex: 2, measuredForce: 0, isPassed: false }, 
@@ -80,6 +85,7 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
       id: generateId(), 
       orderId,
       type: type === SubmissionType.FIRST_PIECE ? "首件" : "末件",
+      inspectionToolNo: currentOrder.toolNo, // 关键：记录当前使用的工具ID
       submitterName: currentUser.name, 
       submittedAt: new Date().toISOString(),
       status: AuditStatus.PENDING,
@@ -104,7 +110,6 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
   };
 
   const handleDeleteRecord = async (recordId: string) => {
-      // 此逻辑理论上只有审计员能触发，UI已限制
       if (!window.confirm("【检验员权限】确定要删除这条未判定的末件记录吗？")) return;
       
       try {
@@ -143,6 +148,20 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
     }
   };
 
+  const handleUpdateTool = async (orderId: string, newToolId: string) => {
+    try {
+        await api.updateOrderTool(orderId, newToolId);
+        await loadData(); // 刷新数据以更新订单信息
+        if (selectedOrder) {
+            // 更新当前选中视图
+            setSelectedOrder(prev => prev ? { ...prev, toolNo: newToolId } : null);
+        }
+        alert("压接工具已更新");
+    } catch (e: any) {
+        alert(`更新工具失败: ${e.message}`);
+    }
+  };
+
   const handleCloseOrder = async (orderId: string) => {
       const orderToClose = orders.find(o => String(o.id) === String(orderId));
       if (!orderToClose) return;
@@ -151,7 +170,7 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
       const hasLastPiece = orderToClose.records.some(r => r.type === "末件");
       const hasPendingRecords = orderToClose.records.some(r => r.status === AuditStatus.PENDING);
 
-      if (!hasFirstPiecePassed) { alert("【无法结束】必须先有合格的首件记录。"); return; }
+      if (!hasFirstPiecePassed) { alert("【无法结束】必须至少有一个合格的首件记录。"); return; }
       if (!hasLastPiece) { alert("【无法结束】尚未提交末件测试记录。"); return; }
       if (hasPendingRecords) { alert("【无法结束】尚有记录待审核判定。"); return; }
 
@@ -180,10 +199,23 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
       }
   };
 
+  // 判定逻辑更新：
+  // 1. 至少一个首件合格
+  // 2. 且 所有末件合格 (若有任意末件不合格，则不合格)
   const getOrderOverallStatus = (order: ProductionOrder) => {
     if (!order.isClosed) return null;
-    const hasFailed = order.records.some(r => r.status === AuditStatus.FAILED);
-    return hasFailed ? "不合格" : "合格";
+    
+    const lastPieces = order.records.filter(r => r.type === "末件");
+    const anyLastPieceFailed = lastPieces.some(r => r.status === AuditStatus.FAILED);
+    
+    if (anyLastPieceFailed) return "不合格";
+
+    const hasPassedFirstPiece = order.records.some(r => r.type === "首件" && r.status === AuditStatus.PASSED);
+    const hasLastPiece = lastPieces.length > 0;
+
+    if (hasPassedFirstPiece && hasLastPiece) return "合格";
+    
+    return "不合格";
   };
 
   if (view === 'CREATE') {
@@ -218,6 +250,7 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
         onDeleteRecord={handleDeleteRecord}
         onAuditRecord={handleAuditRecord}
         onCloseOrder={handleCloseOrder}
+        onUpdateTool={handleUpdateTool}
         currentUser={currentUser}
         tools={tools}
         terminals={terminals}
@@ -323,19 +356,29 @@ const OrderDetailView: React.FC<{
   onDeleteRecord: (recordId: string) => void;
   onAuditRecord: (orderId: string, recordId: string, samples: TerminalSample[]) => void;
   onCloseOrder: (orderId: string) => void;
+  onUpdateTool: (orderId: string, newToolId: string) => void;
   currentUser: User;
   tools: CrimpingTool[];
   terminals: TerminalSpec[];
   wires: WireSpec[];
   isClosing?: boolean;
-}> = ({ order, onBack, onAddRecord, onDeleteRecord, onAuditRecord, onCloseOrder, currentUser, tools, terminals, wires, isClosing }) => {
+}> = ({ order, onBack, onAddRecord, onDeleteRecord, onAuditRecord, onCloseOrder, onUpdateTool, currentUser, tools, terminals, wires, isClosing }) => {
   
   const firstPiecePassed = order.records.some(r => r.type === "首件" && r.status === AuditStatus.PASSED);
   const hasPendingFirstPiece = order.records.some(r => r.type === "首件" && r.status === AuditStatus.PENDING);
   
-  const getTerminalName = (id: string) => terminals.find(t => String(t.id) === id)?.name || id;
+  // 是否允许修改工具：没有“合格”的首件，且订单未结束
+  const canModifyTool = !firstPiecePassed && !order.isClosed && currentUser.role === UserRole.EMPLOYEE;
+  const [isEditingTool, setIsEditingTool] = useState(false);
+  const [tempToolId, setTempToolId] = useState(order.toolNo);
 
-  const isOrderFailed = order.records.some(r => r.status === AuditStatus.FAILED);
+  const getTerminalName = (id: string) => terminals.find(t => String(t.id) === id)?.name || id;
+  const getToolName = (id: string) => {
+      const tool = tools.find(t => String(t.id) === String(id));
+      return tool ? `${tool.model} [${tool.type}]` : id;
+  };
+
+  const isOrderFailed = order.records.some(r => r.type === "末件" && r.status === AuditStatus.FAILED);
 
   return (
     <div className="space-y-4 pb-10">
@@ -355,22 +398,65 @@ const OrderDetailView: React.FC<{
         </div>
       )}
 
+      {/* 修改工具弹窗 */}
+      {isEditingTool && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white w-full max-w-sm rounded-xl p-5 space-y-4">
+                  <h3 className="font-bold text-lg text-gray-900">更改压接工具</h3>
+                  <p className="text-sm text-gray-500">首件尚未合格，您可以修正工具信息。</p>
+                  <Select 
+                      label="选择新工具"
+                      value={tempToolId}
+                      onChange={(e) => setTempToolId(e.target.value)}
+                      options={tools.map(t => ({ 
+                          value: String(t.id), 
+                          label: `${t.model}  [${t.type}]` 
+                      }))}
+                  />
+                  <div className="flex gap-3 pt-2">
+                      <button 
+                          onClick={() => setIsEditingTool(false)}
+                          className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg"
+                      >
+                          取消
+                      </button>
+                      <button 
+                          onClick={() => {
+                              onUpdateTool(order.id, tempToolId);
+                              setIsEditingTool(false);
+                          }}
+                          className="flex-1 py-2 bg-brand-600 text-white rounded-lg font-medium"
+                      >
+                          确认更改
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       <div className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 relative overflow-hidden transition-all duration-500 ${order.isClosed ? 'grayscale opacity-90' : ''}`}>
-        <div className="absolute top-0 right-0 p-2 opacity-10">
-            <svg className="w-24 h-24 text-brand-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
-        </div>
         <div className="flex justify-between mb-2 relative z-10">
             <h2 className="font-bold text-lg text-gray-900">{order.productName}</h2>
             <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded text-gray-600 self-center">{order.productionOrderNo}</span>
         </div>
         <div className="grid grid-cols-2 gap-y-2 text-xs text-gray-600 relative z-10 mt-3">
             <div className="flex flex-col">
-                <span className="text-gray-400">标准拉力</span>
-                <span className="font-bold text-lg text-brand-600">{order.standardPullForce} N</span>
+                <span className="text-gray-400">压接工具</span>
+                <div className="flex items-center gap-2">
+                    <span className="font-bold text-gray-800">{getToolName(order.toolNo)}</span>
+                    {canModifyTool && (
+                        <button 
+                            onClick={() => { setTempToolId(order.toolNo); setIsEditingTool(true); }}
+                            className="text-brand-600 bg-brand-50 px-2 py-0.5 rounded text-[10px] font-medium border border-brand-100"
+                        >
+                            修改
+                        </button>
+                    )}
+                </div>
             </div>
             <div className="flex flex-col">
-                <span className="text-gray-400">创建时间</span>
-                <span className="font-medium text-gray-800">{new Date(order.createdAt).toLocaleString()}</span>
+                <span className="text-gray-400">标准拉力</span>
+                <span className="font-bold text-lg text-brand-600">{order.standardPullForce} N</span>
             </div>
             <div className="flex flex-col">
                 <span className="text-gray-400">端子规格</span>
@@ -447,6 +533,7 @@ const OrderDetailView: React.FC<{
             isOrderClosed={!!order.isClosed}
             onAuditSubmit={(samples) => onAuditRecord(order.id, record.id, samples)}
             onDelete={() => onDeleteRecord(record.id)}
+            tools={tools} 
           />
         ))}
       </div>
@@ -461,12 +548,12 @@ const InspectionCard: React.FC<{
     isOrderClosed: boolean;
     onAuditSubmit: (samples: TerminalSample[]) => void;
     onDelete?: () => void;
-}> = ({ record, standardPullForce, isAuditor, isOrderClosed, onAuditSubmit, onDelete }) => {
+    tools: CrimpingTool[];
+}> = ({ record, standardPullForce, isAuditor, isOrderClosed, onAuditSubmit, onDelete, tools }) => {
     
     const isPending = record.status === AuditStatus.PENDING;
     const canAudit = isAuditor && isPending && !isOrderClosed;
     
-    // 权限变更：只有检验员(AUDITOR)且在待判定状态下才能删除末件记录
     const canDelete = isAuditor && !isOrderClosed && record.type === "末件" && isPending;
 
     const [editSamples, setEditSamples] = useState<TerminalSample[]>(
@@ -492,6 +579,12 @@ const InspectionCard: React.FC<{
         onAuditSubmit(editSamples);
     };
 
+    const getToolName = (id?: string) => {
+        if (!id) return '未知';
+        const tool = tools.find(t => String(t.id) === String(id));
+        return tool ? tool.model : id;
+    };
+
     const displaySamples = canAudit ? editSamples : record.samples;
 
     return (
@@ -505,7 +598,15 @@ const InspectionCard: React.FC<{
                     </span>
                     <div className="flex flex-col">
                         <span className="text-xs text-gray-500 leading-tight">提交: {record.submitterName}</span>
-                        <span className="text-[10px] text-gray-400 leading-tight">{new Date(record.submittedAt).toLocaleString()}</span>
+                        <div className="flex gap-2">
+                             <span className="text-[10px] text-gray-400 leading-tight">{new Date(record.submittedAt).toLocaleString()}</span>
+                             {/* 显示该条记录的工具 */}
+                             {record.inspectionToolNo && (
+                                <span className="text-[10px] text-gray-500 bg-gray-200 px-1 rounded leading-tight">
+                                    工具: {getToolName(record.inspectionToolNo)}
+                                </span>
+                             )}
+                        </div>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">

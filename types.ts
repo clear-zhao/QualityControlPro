@@ -72,6 +72,7 @@ export interface InspectionRecord {
   id: string;
   orderId: string;
   type: string; // "首件" / "末件"
+  inspectionToolNo?: string; // 新增：记录此次检验使用的工具ID/编号
   submitterName: string;
   submittedAt: string;
   status: AuditStatus; // 0, 1, 2
@@ -87,7 +88,7 @@ export interface ProductionOrder {
   productionOrderNo: string; 
   productName: string;
   productModel: string; 
-  toolNo: string; // 存储 Tool 的 Model 字符串或 ID，根据后端逻辑
+  toolNo: string; // 存储 Tool 的 ID string
   terminalSpecId: string; // 存储 ID string
   wireSpecId: string;     // 存储 ID string
   standardPullForce: number;
