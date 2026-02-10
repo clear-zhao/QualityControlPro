@@ -32,10 +32,13 @@ function App() {
                     } catch (e) {
                         // 验证失败 (后端返回 401 或其他错误)
                         console.warn("自动登录验证失败:", e);
+                        
+                        // 移除这里的 alert，因为：
+                        // 1. 如果是 401 (过期/顶号)，api.ts 会触发全局事件，下方监听器会弹窗提示。
+                        // 2. 如果是网络错误，静默失败跳转登录页体验更好。
+                        
                         // 清除失效的会话
                         localStorage.removeItem('qc_user_session');
-                        // 提示用户
-                        alert("自动登录失效：您的账号可能已在其他设备登录，或登录凭证已过期（超过7天）。请重新登录。");
                     }
                 } else {
                     // 旧版本数据没有 token，清除并要求重新登录
@@ -55,7 +58,7 @@ function App() {
   // 监听全局登出事件 (处理异地登录/Token过期 - 运行时)
   useEffect(() => {
     const handleForcedLogout = () => {
-        // 如果当前有用户登录，才提示
+        // 如果当前有用户登录(或本地有缓存)，才提示
         if (localStorage.getItem('qc_user_session') || user) {
             alert("您的账号已在其他设备登录或会话已过期，请重新登录。");
         }
