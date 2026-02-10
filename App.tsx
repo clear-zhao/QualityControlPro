@@ -4,6 +4,8 @@ import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
 import { CrimpingDashboard } from './pages/TerminalCrimping/CrimpingDashboard';
 import { SpecialProcessMenu } from './pages/SpecialProcessMenu'; 
+import { WaveSolderingDashboard } from './pages/WaveSolderingDashboard';
+import { CoatingDashboard } from './pages/CoatingDashboard';
 import { ProcessType, User } from './types';
 
 function App() {
@@ -55,6 +57,12 @@ function App() {
       
       case ProcessType.TERMINAL_CRIMPING:
         return <CrimpingDashboard currentUser={user} />;
+
+      case ProcessType.WAVE_SOLDERING:
+        return <WaveSolderingDashboard />;
+
+      case ProcessType.COATING:
+        return <CoatingDashboard />;
       
       default:
         return (
@@ -75,6 +83,8 @@ function App() {
       if (!currentProcess) return "检验过程记录";
       if (currentProcess === ProcessType.SPECIAL_PROCESS_MENU) return "特殊过程";
       if (currentProcess === ProcessType.TERMINAL_CRIMPING) return "压接端子检验";
+      if (currentProcess === ProcessType.WAVE_SOLDERING) return "波峰焊检验";
+      if (currentProcess === ProcessType.COATING) return "三防涂覆检验";
       return "未知模块";
   };
 
@@ -90,7 +100,11 @@ function App() {
       title={getTitle()}
       showBack={!!currentProcess}
       onBack={() => {
-          if (currentProcess === ProcessType.TERMINAL_CRIMPING) {
+          if (
+            currentProcess === ProcessType.TERMINAL_CRIMPING ||
+            currentProcess === ProcessType.WAVE_SOLDERING ||
+            currentProcess === ProcessType.COATING
+          ) {
               setCurrentProcess(ProcessType.SPECIAL_PROCESS_MENU);
           } else {
               setCurrentProcess(null);

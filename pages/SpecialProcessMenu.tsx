@@ -20,7 +20,7 @@ export const SpecialProcessMenu: React.FC<SpecialProcessMenuProps> = ({ onNaviga
           <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.702.127 1.5.876.983 2.823-.441 3.625M15.123 7.85c.345.05.699.033 1.05-.05l6.082-1.226a2.219 2.219 0 00-1.847-3.662L18.4 4.55c-.53.13-1.07.247-1.595.429M14.719 7.425l-3.328 6.656" />
         </svg>
       ),
-      target: ProcessType.TERMINAL_CRIMPING, // 只有这个已经实现
+      target: ProcessType.TERMINAL_CRIMPING,
       color: 'text-purple-600 bg-purple-50 border-purple-100',
     },
     {
@@ -67,7 +67,7 @@ export const SpecialProcessMenu: React.FC<SpecialProcessMenuProps> = ({ onNaviga
         {modules.map((module) => (
           <Card 
             key={module.id} 
-            onClick={() => module.target === ProcessType.TERMINAL_CRIMPING ? onNavigate(module.target) : alert(`${module.title} 模块正在开发中`)}
+            onClick={() => onNavigate(module.target)}
             className={`flex items-center gap-5 p-5 border-l-4 hover:shadow-md transition-all ${module.color}`}
           >
             <div className={`p-3 rounded-full bg-white bg-opacity-60`}>
