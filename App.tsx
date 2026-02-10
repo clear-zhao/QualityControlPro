@@ -5,32 +5,78 @@ import { Login } from './pages/Login';
 import { CrimpingDashboard } from './pages/TerminalCrimping/CrimpingDashboard';
 import { SpecialProcessMenu } from './pages/SpecialProcessMenu'; 
 import { ProcessType, User } from './types';
+import { AUTH_LOGOUT_EVENT, api } from './services/api';
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [currentProcess, setCurrentProcess] = useState<ProcessType | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
 
-  // 检查自动登录状态
+  // 检查自动登录状态 (App启动时验证 Token)
   useEffect(() => {
-    const savedUser = localStorage.getItem('qc_user_session');
-    if (savedUser) {
-      try {
-        const parsedUser = JSON.parse(savedUser);
-        setUser(parsedUser);
-      } catch (e) {
-        console.error("解析本地会话失败", e);
-        localStorage.removeItem('qc_user_session');
-      }
-    }
-    setIsInitializing(false);
+    const checkAutoLogin = async () => {
+        const savedSession = localStorage.getItem('qc_user_session');
+        
+        if (savedSession) {
+            try {
+                const localUser = JSON.parse(savedSession) as User;
+                
+                // 只有当本地存储包含 token 时才去验证
+                if (localUser.username && localUser.token) {
+                    try {
+                        // 调用后端验证 Token 是否过期或被顶号
+                        const verifiedUser = await api.checkToken(localUser.username, localUser.token);
+                        setUser(verifiedUser);
+                        // 更新本地存储（保持最新信息）
+                        localStorage.setItem('qc_user_session', JSON.stringify(verifiedUser));
+                    } catch (e) {
+                        // 验证失败 (后端返回 401 或其他错误)
+                        console.warn("自动登录验证失败:", e);
+                        // 清除失效的会话
+                        localStorage.removeItem('qc_user_session');
+                        // 提示用户
+                        alert("自动登录失效：您的账号可能已在其他设备登录，或登录凭证已过期（超过7天）。请重新登录。");
+                    }
+                } else {
+                    // 旧版本数据没有 token，清除并要求重新登录
+                    localStorage.removeItem('qc_user_session');
+                }
+            } catch (e) {
+                console.error("解析本地会话失败", e);
+                localStorage.removeItem('qc_user_session');
+            }
+        }
+        setIsInitializing(false);
+    };
+
+    checkAutoLogin();
   }, []);
+
+  // 监听全局登出事件 (处理异地登录/Token过期 - 运行时)
+  useEffect(() => {
+    const handleForcedLogout = () => {
+        // 如果当前有用户登录，才提示
+        if (localStorage.getItem('qc_user_session') || user) {
+            alert("您的账号已在其他设备登录或会话已过期，请重新登录。");
+        }
+        localStorage.removeItem('qc_user_session');
+        setUser(null);
+        setCurrentProcess(null);
+    };
+
+    window.addEventListener(AUTH_LOGOUT_EVENT, handleForcedLogout);
+
+    return () => {
+        window.removeEventListener(AUTH_LOGOUT_EVENT, handleForcedLogout);
+    };
+  }, [user]);
 
   // 如果正在初始化，显示一个简单的加载页，避免登录页闪烁
   if (isInitializing) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center flex-col gap-3">
         <div className="animate-spin w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full"></div>
+        <p className="text-gray-400 text-sm">正在验证身份...</p>
       </div>
     );
   }

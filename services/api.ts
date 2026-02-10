@@ -3,7 +3,17 @@ import { ProductionOrder, User, InspectionRecord, UserRole, TerminalSample, Crim
 // C# 后端地址
 const API_BASE_URL = 'http://localhost:5075/api';
 
+// 自定义事件名称
+export const AUTH_LOGOUT_EVENT = 'auth:logout';
+
 const handleResponse = async (response: Response) => {
+  // 处理 401 未授权 (通常意味着 Token 过期或在其他设备登录)
+  if (response.status === 401) {
+    // 触发全局登出事件
+    window.dispatchEvent(new Event(AUTH_LOGOUT_EVENT));
+    throw new Error("会话已过期或账号在其他设备登录");
+  }
+
   if (response.ok) {
     if (response.status === 204) return null;
     const text = await response.text();
@@ -48,6 +58,27 @@ export const api = {
       username: data.employeeId,
       name: data.name,
       role: mappedRole,
+      token: data.token // 保存后端返回的 Token
+    };
+  },
+
+  // 新增：检查 Token 有效性 (用于自动登录)
+  checkToken: async (employeeId: string, token: string): Promise<User> => {
+    const response = await fetch(`${API_BASE_URL}/Auth/check-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId, token }),
+    });
+    // handleResponse 会自动处理 401 错误
+    const data = await handleResponse(response);
+    
+    const mappedRole = data.role === 1 ? UserRole.AUDITOR : UserRole.EMPLOYEE;
+    
+    return {
+        username: data.employeeId,
+        name: data.name,
+        role: mappedRole,
+        token: data.token // 刷新 Token (如果后端有更新机制) 或保持原样
     };
   },
 
