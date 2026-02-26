@@ -1,7 +1,7 @@
 import { ProductionOrder, User, InspectionRecord, UserRole, TerminalSample, CrimpingTool, TerminalSpec, WireSpec, PullForceStandard } from '../types';
 
 // C# 后端地址
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'http://10.10.20.19:5000/api';
 
 // 自定义事件名称
 export const AUTH_LOGOUT_EVENT = 'auth:logout';
