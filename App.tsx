@@ -15,7 +15,7 @@ function App() {
   // 检查自动登录状态 (App启动时验证 Token)
   useEffect(() => {
     const checkAutoLogin = async () => {
-        const savedSession = localStorage.getItem('qc_user_session');
+        const savedSession = localStorage.getItem('qc_user_session') || sessionStorage.getItem('qc_user_session');
         
         if (savedSession) {
             try {
@@ -28,7 +28,11 @@ function App() {
                         const verifiedUser = await api.checkToken(localUser.username, localUser.token);
                         setUser(verifiedUser);
                         // 更新本地存储（保持最新信息）
-                        localStorage.setItem('qc_user_session', JSON.stringify(verifiedUser));
+                        if (localStorage.getItem('qc_user_session')) {
+                            localStorage.setItem('qc_user_session', JSON.stringify(verifiedUser));
+                        } else {
+                            sessionStorage.setItem('qc_user_session', JSON.stringify(verifiedUser));
+                        }
                     } catch (e) {
                         // 验证失败 (后端返回 401 或其他错误)
                         console.warn("自动登录验证失败:", e);
@@ -39,14 +43,17 @@ function App() {
                         
                         // 清除失效的会话
                         localStorage.removeItem('qc_user_session');
+                        sessionStorage.removeItem('qc_user_session');
                     }
                 } else {
                     // 旧版本数据没有 token，清除并要求重新登录
                     localStorage.removeItem('qc_user_session');
+                    sessionStorage.removeItem('qc_user_session');
                 }
             } catch (e) {
                 console.error("解析本地会话失败", e);
                 localStorage.removeItem('qc_user_session');
+                sessionStorage.removeItem('qc_user_session');
             }
         }
         setIsInitializing(false);
@@ -61,10 +68,11 @@ function App() {
         const customEvent = e as CustomEvent;
         const msg = customEvent.detail || "您的账号已在其他设备登录或会话已过期，请重新登录。";
         // 如果当前有用户登录(或本地有缓存)，才提示
-        if (localStorage.getItem('qc_user_session') || user) {
+        if (localStorage.getItem('qc_user_session') || sessionStorage.getItem('qc_user_session') || user) {
             alert(msg);
         }
         localStorage.removeItem('qc_user_session');
+        sessionStorage.removeItem('qc_user_session');
         setUser(null);
         setCurrentProcess(null);
     };
@@ -132,6 +140,7 @@ function App() {
   const handleLogout = () => {
     // 退出时清除自动登录信息
     localStorage.removeItem('qc_user_session');
+    sessionStorage.removeItem('qc_user_session');
     setUser(null);
     setCurrentProcess(null);
   };

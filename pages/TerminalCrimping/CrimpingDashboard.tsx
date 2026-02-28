@@ -21,6 +21,10 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
   const [standards, setStandards] = useState<PullForceStandard[]>([]);
 
   const [isClosing, setIsClosing] = useState(false);
+  const [isSubmittingRecord, setIsSubmittingRecord] = useState(false);
+  const [isDeletingRecord, setIsDeletingRecord] = useState(false);
+  const [isAuditingRecord, setIsAuditingRecord] = useState(false);
+  const [isUpdatingTool, setIsUpdatingTool] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -64,6 +68,8 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
   };
 
   const handleAddRecord = async (orderId: string, type: SubmissionType) => {
+    if (isSubmittingRecord) return;
+    setIsSubmittingRecord(true);
     // 查找当前订单以获取当前工具
     const currentOrder = orders.find(o => o.id === orderId);
     if (!currentOrder) return;
@@ -106,12 +112,16 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
         }
     } catch (e: any) {
         alert(`提交失败: ${e.message}`);
+    } finally {
+        setIsSubmittingRecord(false);
     }
   };
 
   const handleDeleteRecord = async (recordId: string) => {
+      if (isDeletingRecord) return;
       if (!window.confirm("【检验员权限】确定要删除这条未判定的末件记录吗？")) return;
       
+      setIsDeletingRecord(true);
       try {
           await api.deleteRecord(recordId);
           await loadData();
@@ -125,10 +135,14 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
           }
       } catch (e: any) {
           alert(`删除失败: ${e.message}`);
+      } finally {
+          setIsDeletingRecord(false);
       }
   };
 
   const handleAuditRecord = async (orderId: string, recordId: string, samples: TerminalSample[]) => {
+    if (isAuditingRecord) return;
+    setIsAuditingRecord(true);
     const allPassed = samples.every(s => s.isPassed);
     const newStatus = allPassed ? AuditStatus.PASSED : AuditStatus.FAILED;
 
@@ -145,10 +159,14 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
         }
     } catch (e: any) {
         alert(`审核提交失败: ${e.message}`);
+    } finally {
+        setIsAuditingRecord(false);
     }
   };
 
   const handleUpdateTool = async (orderId: string, newToolId: string) => {
+    if (isUpdatingTool) return;
+    setIsUpdatingTool(true);
     try {
         await api.updateOrderTool(orderId, newToolId);
         await loadData(); // 刷新数据以更新订单信息
@@ -159,6 +177,8 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
         alert("压接工具已更新");
     } catch (e: any) {
         alert(`更新工具失败: ${e.message}`);
+    } finally {
+        setIsUpdatingTool(false);
     }
   };
 
@@ -222,8 +242,11 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
     return (
       <>
         <div className="mb-4">
-             <button onClick={() => setView('LIST')} className="text-sm text-gray-500 flex items-center gap-1">
-                &larr; 返回列表
+             <button onClick={() => setView('LIST')} className="text-gray-600 hover:text-gray-900 flex items-center gap-2 p-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                <span className="text-lg font-medium">返回列表</span>
              </button>
         </div>
         <CreateOrder 
@@ -256,6 +279,9 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
         terminals={terminals}
         wires={wires}
         isClosing={isClosing}
+        isSubmittingRecord={isSubmittingRecord}
+        isUpdatingTool={isUpdatingTool}
+        isDeletingRecord={isDeletingRecord}
       />
     );
   }
@@ -362,7 +388,10 @@ const OrderDetailView: React.FC<{
   terminals: TerminalSpec[];
   wires: WireSpec[];
   isClosing?: boolean;
-}> = ({ order, onBack, onAddRecord, onDeleteRecord, onAuditRecord, onCloseOrder, onUpdateTool, currentUser, tools, terminals, wires, isClosing }) => {
+  isSubmittingRecord?: boolean;
+  isUpdatingTool?: boolean;
+  isDeletingRecord?: boolean;
+}> = ({ order, onBack, onAddRecord, onDeleteRecord, onAuditRecord, onCloseOrder, onUpdateTool, currentUser, tools, terminals, wires, isClosing, isSubmittingRecord, isUpdatingTool, isDeletingRecord }) => {
   
   const firstPiecePassed = order.records.some(r => r.type === "首件" && r.status === AuditStatus.PASSED);
   const hasPendingFirstPiece = order.records.some(r => r.type === "首件" && r.status === AuditStatus.PENDING);
@@ -382,7 +411,12 @@ const OrderDetailView: React.FC<{
 
   return (
     <div className="space-y-4 pb-10">
-      <button onClick={onBack} className="text-sm text-gray-500 mb-2 flex items-center">&larr; 返回列表</button>
+      <button onClick={onBack} className="text-gray-600 hover:text-gray-900 flex items-center gap-2 p-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors mb-2">
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          <span className="text-lg font-medium">返回列表</span>
+      </button>
       
       {order.isClosed && (
         <div className={`p-3 rounded-lg text-sm flex items-center justify-between shadow-sm border ${
@@ -425,9 +459,12 @@ const OrderDetailView: React.FC<{
                               onUpdateTool(order.id, tempToolId);
                               setIsEditingTool(false);
                           }}
-                          className="flex-1 py-2 bg-brand-600 text-white rounded-lg font-medium"
+                          disabled={isUpdatingTool}
+                          className={`flex-1 py-2 text-white rounded-lg font-medium ${
+                              isUpdatingTool ? 'bg-brand-400 cursor-not-allowed' : 'bg-brand-600'
+                          }`}
                       >
-                          确认更改
+                          {isUpdatingTool ? '更新中...' : '确认更改'}
                       </button>
                   </div>
               </div>
@@ -472,30 +509,30 @@ const OrderDetailView: React.FC<{
       {!order.isClosed && currentUser.role === UserRole.EMPLOYEE && (
         <div className="grid grid-cols-2 gap-3">
           <button
-            disabled={hasPendingFirstPiece || firstPiecePassed} 
+            disabled={hasPendingFirstPiece || firstPiecePassed || isSubmittingRecord} 
             onClick={() => onAddRecord(order.id, SubmissionType.FIRST_PIECE)}
             className={`py-3 rounded-xl font-medium shadow-sm transition-all border flex flex-col items-center justify-center gap-1 h-20 ${
                firstPiecePassed 
                 ? 'bg-green-50 border-green-200 text-green-700 cursor-not-allowed opacity-60' 
-                : hasPendingFirstPiece 
+                : hasPendingFirstPiece || isSubmittingRecord
                     ? 'bg-yellow-50 border-yellow-200 text-yellow-700 cursor-not-allowed opacity-80'
                     : 'bg-white border-brand-200 text-brand-600 hover:bg-brand-50'
             }`}
           >
-            <span className="font-bold">{firstPiecePassed ? '首件合格' : '提交首件'}</span>
+            <span className="font-bold">{isSubmittingRecord ? '提交中...' : firstPiecePassed ? '首件合格' : '提交首件'}</span>
             <span className="text-[10px] font-normal">{hasPendingFirstPiece ? '等待审核...' : firstPiecePassed ? '允许生产' : '需审核'}</span>
           </button>
 
           <button
-            disabled={!firstPiecePassed}
+            disabled={!firstPiecePassed || isSubmittingRecord}
             onClick={() => onAddRecord(order.id, SubmissionType.LAST_PIECE)}
             className={`py-3 rounded-xl font-medium shadow-sm transition-all border flex flex-col items-center justify-center gap-1 h-20 ${
-              !firstPiecePassed 
+              !firstPiecePassed || isSubmittingRecord
                 ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed' 
                 : 'bg-brand-600 border-brand-600 text-white hover:bg-brand-700'
             }`}
           >
-            <span className="font-bold">提交末件</span>
+            <span className="font-bold">{isSubmittingRecord ? '提交中...' : '提交末件'}</span>
             <span className="text-[10px] font-normal">结束生产时提交</span>
           </button>
         </div>
@@ -534,6 +571,8 @@ const OrderDetailView: React.FC<{
             onAuditSubmit={(samples) => onAuditRecord(order.id, record.id, samples)}
             onDelete={() => onDeleteRecord(record.id)}
             tools={tools} 
+            isAuditingRecord={isAuditingRecord}
+            isDeletingRecord={isDeletingRecord}
           />
         ))}
       </div>
@@ -549,7 +588,9 @@ const InspectionCard: React.FC<{
     onAuditSubmit: (samples: TerminalSample[]) => void;
     onDelete?: () => void;
     tools: CrimpingTool[];
-}> = ({ record, standardPullForce, isAuditor, isOrderClosed, onAuditSubmit, onDelete, tools }) => {
+    isAuditingRecord?: boolean;
+    isDeletingRecord?: boolean;
+}> = ({ record, standardPullForce, isAuditor, isOrderClosed, onAuditSubmit, onDelete, tools, isAuditingRecord, isDeletingRecord }) => {
     
     const isPending = record.status === AuditStatus.PENDING;
     const canAudit = isAuditor && isPending && !isOrderClosed;
@@ -614,7 +655,10 @@ const InspectionCard: React.FC<{
                     {canDelete && onDelete && (
                         <button 
                             onClick={(e) => { e.stopPropagation(); onDelete(); }}
-                            className="text-red-400 hover:text-red-600 p-1 bg-red-50 hover:bg-red-100 rounded-full transition-colors shrink-0"
+                            disabled={isDeletingRecord}
+                            className={`p-1 rounded-full transition-colors shrink-0 ${
+                                isDeletingRecord ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : 'text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100'
+                            }`}
                             title="检验员专用: 删除未判定末件记录"
                         >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -661,7 +705,15 @@ const InspectionCard: React.FC<{
                 </table>
                 {canAudit && (
                     <div className="mt-4 text-right">
-                         <button onClick={handleSave} className="bg-brand-600 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-md active:scale-95 transition-transform">提交判定结论</button>
+                         <button 
+                            onClick={handleSave} 
+                            disabled={isAuditingRecord}
+                            className={`px-6 py-2 rounded-lg text-sm font-bold shadow-md transition-all ${
+                                isAuditingRecord ? 'bg-brand-400 text-white cursor-not-allowed' : 'bg-brand-600 text-white active:scale-95'
+                            }`}
+                         >
+                            {isAuditingRecord ? '提交中...' : '提交判定结论'}
+                         </button>
                     </div>
                 )}
             </div>

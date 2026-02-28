@@ -34,6 +34,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   }, []);
 
   const handleLogin = async () => {
+    if (isLoading) return;
     if(!selectedUserId || !password) {
         setError("请选择员工姓名并输入密码");
         return;
@@ -46,8 +47,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       const user = await api.login(selectedUserId, password);
       if (autoLogin) {
         localStorage.setItem('qc_user_session', JSON.stringify(user));
+        sessionStorage.removeItem('qc_user_session');
       } else {
         localStorage.removeItem('qc_user_session');
+        sessionStorage.setItem('qc_user_session', JSON.stringify(user));
       }
       onLogin(user);
     } catch (err: any) {

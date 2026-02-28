@@ -52,9 +52,12 @@ export const SpecialProcessMenu: React.FC<SpecialProcessMenuProps> = ({ onNaviga
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 mb-4 text-gray-500">
-         <button onClick={onBack} className="text-sm flex items-center hover:text-gray-800">
-            &larr; 返回工作台
+      <div className="flex items-center gap-2 mb-4">
+         <button onClick={onBack} className="text-gray-600 hover:text-gray-900 flex items-center gap-2 p-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            <span className="text-lg font-medium">返回工作台</span>
          </button>
       </div>
 

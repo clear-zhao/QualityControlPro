@@ -28,6 +28,7 @@ export const CreateOrder: React.FC<CreateOrderProps> = ({
 
   const [generatedId, setGeneratedId] = useState('');
   const [standardPullForce, setStandardPullForce] = useState<number | ''>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const activeTools = tools.filter(t => !t.isDisabled);
   const activeTerminals = terminals.filter(t => !t.isDisabled);
@@ -71,7 +72,9 @@ export const CreateOrder: React.FC<CreateOrderProps> = ({
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
+
     if (!formData.productionOrderNo || !formData.terminalSpecId || !formData.toolNo || !formData.wireSpecId) {
       alert("请填写完整信息");
       return;
@@ -92,7 +95,12 @@ export const CreateOrder: React.FC<CreateOrderProps> = ({
       records: []
     };
 
-    onSubmit(newOrder);
+    setIsSubmitting(true);
+    try {
+      await onSubmit(newOrder);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -203,9 +211,12 @@ export const CreateOrder: React.FC<CreateOrderProps> = ({
 
       <button 
         onClick={handleSubmit}
-        className="w-full bg-brand-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:bg-brand-700 active:scale-95 transition-all fixed bottom-6 left-4 right-4 max-w-[calc(100%-2rem)] md:max-w-[416px] mx-auto z-20"
+        disabled={isSubmitting}
+        className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all fixed bottom-6 left-4 right-4 max-w-[calc(100%-2rem)] md:max-w-[416px] mx-auto z-20 ${
+          isSubmitting ? 'bg-brand-400 text-white cursor-not-allowed' : 'bg-brand-600 text-white hover:bg-brand-700 active:scale-95'
+        }`}
       >
-        新增订单
+        {isSubmitting ? '正在创建...' : '新增订单'}
       </button>
       <div className="h-12"></div> 
     </div>
