@@ -589,32 +589,32 @@ const InspectionCard: React.FC<{
 
     return (
         <Card className={`overflow-hidden p-0 ${isPending ? 'border-yellow-200 ring-4 ring-yellow-50' : 'border-gray-200'} ${isOrderClosed ? 'opacity-80' : ''}`}>
-            <div className={`px-4 py-3 border-b flex justify-between items-center ${isPending ? 'bg-yellow-50' : 'bg-gray-50'}`}>
-                <div className="flex items-center gap-2">
-                    <span className={`px-2 py-1 rounded text-xs font-bold ${
+            <div className={`px-3 py-3 border-b flex justify-between items-start gap-2 ${isPending ? 'bg-yellow-50' : 'bg-gray-50'}`}>
+                <div className="flex items-start gap-2 min-w-0">
+                    <span className={`shrink-0 px-2 py-1 rounded text-xs font-bold mt-0.5 ${
                         record.type === "首件" ? 'bg-purple-600 text-white' : 'bg-blue-600 text-white'
                     }`}>
                         {record.type}
                     </span>
-                    <div className="flex flex-col">
-                        <span className="text-xs text-gray-500 leading-tight">提交: {record.submitterName}</span>
-                        <div className="flex gap-2">
-                             <span className="text-[10px] text-gray-400 leading-tight">{new Date(record.submittedAt).toLocaleString()}</span>
+                    <div className="flex flex-col min-w-0">
+                        <span className="text-xs text-gray-600 font-medium leading-tight truncate">提交: {record.submitterName}</span>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                             <span className="text-[10px] text-gray-400 leading-tight whitespace-nowrap">{new Date(record.submittedAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                              {/* 显示该条记录的工具 */}
                              {record.inspectionToolNo && (
-                                <span className="text-[10px] text-gray-500 bg-gray-200 px-1 rounded leading-tight">
+                                <span className="text-[10px] text-gray-500 bg-gray-200/80 px-1.5 py-0.5 rounded leading-tight whitespace-nowrap">
                                     工具: {getToolName(record.inspectionToolNo)}
                                 </span>
                              )}
                         </div>
                     </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 shrink-0 mt-0.5">
                     <StatusBadge status={record.status} />
                     {canDelete && onDelete && (
                         <button 
                             onClick={(e) => { e.stopPropagation(); onDelete(); }}
-                            className="text-red-400 hover:text-red-600 p-1 bg-red-50 rounded-full transition-colors"
+                            className="text-red-400 hover:text-red-600 p-1 bg-red-50 hover:bg-red-100 rounded-full transition-colors shrink-0"
                             title="检验员专用: 删除未判定末件记录"
                         >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -670,7 +670,7 @@ const InspectionCard: React.FC<{
 };
 
 const StatusBadge: React.FC<{status: AuditStatus}> = ({status}) => {
-    if(status === AuditStatus.PENDING) return <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">待审核</span>;
-    if(status === AuditStatus.PASSED) return <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">合格</span>;
-    return <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">不合格</span>;
+    if(status === AuditStatus.PENDING) return <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded whitespace-nowrap">待审核</span>;
+    if(status === AuditStatus.PASSED) return <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded whitespace-nowrap">合格</span>;
+    return <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded whitespace-nowrap">不合格</span>;
 }

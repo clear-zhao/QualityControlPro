@@ -6,40 +6,45 @@ const API_BASE_URL = 'http://10.10.20.19:5000/api';
 // 自定义事件名称
 export const AUTH_LOGOUT_EVENT = 'auth:logout';
 
-const handleResponse = async (response: Response) => {
-  // 处理 401 未授权 (通常意味着 Token 过期或在其他设备登录)
-  if (response.status === 401) {
-    // 触发全局登出事件
-    window.dispatchEvent(new Event(AUTH_LOGOUT_EVENT));
-    throw new Error("会话已过期或账号在其他设备登录");
-  }
-
-  if (response.ok) {
-    if (response.status === 204) return null;
-    const text = await response.text();
-    if (!text) return null; 
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      return null;
-    }
-  }
-
-  const errorText = await response.text();
+const handleResponse = async (response: Response, ignore401: boolean = false) => {
+  let errorText = '';
   let errorMessage = `请求失败: ${response.status}`;
 
-  if (errorText) {
-    try {
-        const jsonError = JSON.parse(errorText);
-        const msg = jsonError.message || jsonError.title || jsonError.error;
-        if (msg) errorMessage = msg;
-    } catch (e) {
-        if (errorText.length < 500 && !errorText.trim().startsWith('<')) {
-            errorMessage = errorText;
-        }
+  if (!response.ok) {
+    errorText = await response.text();
+    if (errorText) {
+      try {
+          const jsonError = JSON.parse(errorText);
+          // ASP.NET Core ProblemDetails uses 'detail' for the specific message
+          const msg = jsonError.detail || jsonError.message || jsonError.title || jsonError.error;
+          if (msg) errorMessage = msg;
+      } catch (e) {
+          if (errorText.length < 500 && !errorText.trim().startsWith('<')) {
+              errorMessage = errorText;
+          }
+      }
     }
   }
-  throw new Error(errorMessage);
+
+  // 处理 401 未授权 (通常意味着 Token 过期或在其他设备登录)
+  if (response.status === 401 && !ignore401) {
+    // 触发全局登出事件，传递后端返回的具体错误信息
+    window.dispatchEvent(new CustomEvent(AUTH_LOGOUT_EVENT, { detail: errorMessage }));
+    throw new Error(errorMessage);
+  }
+
+  if (!response.ok) {
+    throw new Error(errorMessage);
+  }
+
+  if (response.status === 204) return null;
+  const text = await response.text();
+  if (!text) return null; 
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    return null;
+  }
 };
 
 export const api = {
@@ -50,7 +55,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     });
-    const data = await handleResponse(response);
+    const data = await handleResponse(response, true);
     
     const mappedRole = data.role === 1 ? UserRole.AUDITOR : UserRole.EMPLOYEE;
     

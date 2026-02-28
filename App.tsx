@@ -57,10 +57,12 @@ function App() {
 
   // 监听全局登出事件 (处理异地登录/Token过期 - 运行时)
   useEffect(() => {
-    const handleForcedLogout = () => {
+    const handleForcedLogout = (e: Event) => {
+        const customEvent = e as CustomEvent;
+        const msg = customEvent.detail || "您的账号已在其他设备登录或会话已过期，请重新登录。";
         // 如果当前有用户登录(或本地有缓存)，才提示
         if (localStorage.getItem('qc_user_session') || user) {
-            alert("您的账号已在其他设备登录或会话已过期，请重新登录。");
+            alert(msg);
         }
         localStorage.removeItem('qc_user_session');
         setUser(null);
