@@ -30,11 +30,12 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
     loadData();
   }, []);
 
-  const loadData = async () => {
+  // 加载全部数据并返回最新订单列表，调用方可直接使用返回值更新 selectedOrder，无需二次请求
+  const loadData = async (): Promise<ProductionOrder[]> => {
     try {
       setLoading(true);
-      const ordersPromise = currentUser.role === UserRole.AUDITOR 
-        ? api.getOrders() 
+      const ordersPromise = currentUser.role === UserRole.AUDITOR
+        ? api.getOrders()
         : api.getOrdersByEmployee(currentUser.username);
 
       const [fetchedOrders, fetchedTools, fetchedTerminals, fetchedWires, fetchedStandards] = await Promise.all([
@@ -44,14 +45,16 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
         api.getWireSpecs(),
         api.getPullForceStandards()
       ]);
-      
+
       setOrders(fetchedOrders);
       setTools(fetchedTools);
       setTerminals(fetchedTerminals);
       setWires(fetchedWires);
       setStandards(fetchedStandards);
+      return fetchedOrders;
     } catch (error) {
       console.error("数据加载失败", error);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -69,14 +72,16 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
 
   const handleAddRecord = async (orderId: string, type: SubmissionType) => {
     if (isSubmittingRecord) return;
-    setIsSubmittingRecord(true);
-    // 查找当前订单以获取当前工具
+
+    // 校验放在 setIsSubmittingRecord 之前，避免找不到订单时锁死按钮状态
     const currentOrder = orders.find(o => o.id === orderId);
     if (!currentOrder) return;
 
+    setIsSubmittingRecord(true);
+
     const initialSamples: TerminalSample[] = [
-        { id: 0, sampleIndex: 1, measuredForce: 0, isPassed: false }, 
-        { id: 0, sampleIndex: 2, measuredForce: 0, isPassed: false }, 
+        { id: 0, sampleIndex: 1, measuredForce: 0, isPassed: false },
+        { id: 0, sampleIndex: 2, measuredForce: 0, isPassed: false },
         { id: 0, sampleIndex: 3, measuredForce: 0, isPassed: false }
     ];
 
@@ -88,11 +93,11 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
     };
 
     const newRecord: InspectionRecord = {
-      id: generateId(), 
+      id: generateId(),
       orderId,
       type: type === SubmissionType.FIRST_PIECE ? "首件" : "末件",
-      inspectionToolNo: currentOrder.toolNo, // 关键：记录当前使用的工具ID
-      submitterName: currentUser.name, 
+      inspectionToolNo: currentOrder.toolNo,
+      submitterName: currentUser.name,
       submittedAt: new Date().toISOString(),
       status: AuditStatus.PENDING,
       samples: initialSamples,
@@ -101,12 +106,9 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
 
     try {
         await api.addRecord(orderId, newRecord);
-        await loadData();
+        // 直接使用 loadData 返回值更新 selectedOrder，消除二次请求
+        const latestOrders = await loadData();
         if (selectedOrder) {
-            const ordersPromise = currentUser.role === UserRole.AUDITOR 
-              ? api.getOrders() 
-              : api.getOrdersByEmployee(currentUser.username);
-            const latestOrders = await ordersPromise;
             const updated = latestOrders.find(o => o.id === selectedOrder.id);
             if (updated) setSelectedOrder(updated);
         }
@@ -120,16 +122,12 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
   const handleDeleteRecord = async (recordId: string) => {
       if (isDeletingRecord) return;
       if (!window.confirm("【检验员权限】确定要删除这条未判定的末件记录吗？")) return;
-      
+
       setIsDeletingRecord(true);
       try {
           await api.deleteRecord(recordId);
-          await loadData();
+          const latestOrders = await loadData();
           if (selectedOrder) {
-              const ordersPromise = currentUser.role === UserRole.AUDITOR 
-                ? api.getOrders() 
-                : api.getOrdersByEmployee(currentUser.username);
-              const latestOrders = await ordersPromise;
               const updated = latestOrders.find(o => o.id === selectedOrder.id);
               if (updated) setSelectedOrder(updated);
           }
@@ -148,12 +146,8 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
 
     try {
         await api.auditRecord(recordId, samples, currentUser.name, newStatus, null);
-        await loadData();
+        const latestOrders = await loadData();
         if (selectedOrder) {
-            const ordersPromise = currentUser.role === UserRole.AUDITOR 
-              ? api.getOrders() 
-              : api.getOrdersByEmployee(currentUser.username);
-            const latestOrders = await ordersPromise;
             const updated = latestOrders.find(o => o.id === selectedOrder.id);
             if (updated) setSelectedOrder(updated);
         }
@@ -202,12 +196,8 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
       try {
           await api.closeOrder(orderId);
           alert("订单已成功结束并归档。");
-          await loadData();
+          const latestOrders = await loadData();
           if (selectedOrder && selectedOrder.id === orderId) {
-             const ordersPromise = currentUser.role === UserRole.AUDITOR 
-               ? api.getOrders() 
-               : api.getOrdersByEmployee(currentUser.username);
-             const latestOrders = await ordersPromise;
              const updated = latestOrders.find(o => o.id === orderId);
              if (updated) setSelectedOrder(updated);
           }
@@ -282,6 +272,7 @@ export const CrimpingDashboard: React.FC<CrimpingDashboardProps> = ({ currentUse
         isSubmittingRecord={isSubmittingRecord}
         isUpdatingTool={isUpdatingTool}
         isDeletingRecord={isDeletingRecord}
+        isAuditingRecord={isAuditingRecord}
       />
     );
   }
@@ -382,7 +373,7 @@ const OrderDetailView: React.FC<{
   onDeleteRecord: (recordId: string) => void;
   onAuditRecord: (orderId: string, recordId: string, samples: TerminalSample[]) => void;
   onCloseOrder: (orderId: string) => void;
-  onUpdateTool: (orderId: string, newToolId: string) => void;
+  onUpdateTool: (orderId: string, newToolId: string) => Promise<void>;
   currentUser: User;
   tools: CrimpingTool[];
   terminals: TerminalSpec[];
@@ -391,7 +382,8 @@ const OrderDetailView: React.FC<{
   isSubmittingRecord?: boolean;
   isUpdatingTool?: boolean;
   isDeletingRecord?: boolean;
-}> = ({ order, onBack, onAddRecord, onDeleteRecord, onAuditRecord, onCloseOrder, onUpdateTool, currentUser, tools, terminals, wires, isClosing, isSubmittingRecord, isUpdatingTool, isDeletingRecord }) => {
+  isAuditingRecord?: boolean;
+}> = ({ order, onBack, onAddRecord, onDeleteRecord, onAuditRecord, onCloseOrder, onUpdateTool, currentUser, tools, terminals, wires, isClosing, isSubmittingRecord, isUpdatingTool, isDeletingRecord, isAuditingRecord }) => {
   
   const firstPiecePassed = order.records.some(r => r.type === "首件" && r.status === AuditStatus.PASSED);
   const hasPendingFirstPiece = order.records.some(r => r.type === "首件" && r.status === AuditStatus.PENDING);
@@ -454,9 +446,10 @@ const OrderDetailView: React.FC<{
                       >
                           取消
                       </button>
-                      <button 
-                          onClick={() => {
-                              onUpdateTool(order.id, tempToolId);
+                      <button
+                          onClick={async () => {
+                              // 先等待更新完成，再关闭弹窗，避免弹窗关闭后丢失操作反馈
+                              await onUpdateTool(order.id, tempToolId);
                               setIsEditingTool(false);
                           }}
                           disabled={isUpdatingTool}

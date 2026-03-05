@@ -11,10 +11,46 @@ import {
 } from "../types";
 
 // C# 后端地址
-const API_BASE_URL = "http://localhost:5000/api";
+const API_BASE_URL = "http://localhost:18080/api";
 
 // 自定义事件名称
 export const AUTH_LOGOUT_EVENT = "auth:logout";
+
+// 从本地存储读取用户凭证，组装认证请求头（X-Employee-Id / X-Token）
+const getAuthHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  // 优先 localStorage，回退 sessionStorage（兼容"记住登录"与"会话登录"两种模式）
+  const raw =
+    localStorage.getItem("qc_user_session") ||
+    sessionStorage.getItem("qc_user_session");
+  if (raw) {
+    try {
+      const user = JSON.parse(raw);
+      if (user.username) headers["X-Employee-Id"] = user.username;
+      if (user.token) headers["X-Token"] = user.token;
+    } catch {
+      /* 解析失败则不注入，交给后端 401 拦截 */
+    }
+  }
+  return headers;
+};
+
+// 带认证头的 fetch 封装，所有业务 API 统一使用，避免手动拼装 headers
+const fetchWithAuth = (
+  url: string,
+  options: RequestInit = {},
+): Promise<Response> => {
+  const authHeaders = getAuthHeaders();
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...authHeaders,
+      ...(options.headers || {}),
+    },
+  });
+};
 
 const handleResponse = async (
   response: Response,
@@ -106,8 +142,9 @@ export const api = {
     };
   },
 
+  // 匿名接口：登录页获取员工列表，无需认证头
   getUsers: async (): Promise<
-    { id: number; name: string; isDisabled?: boolean }[]
+    { id: string; name: string; isDisabled?: boolean }[]
   > => {
     const response = await fetch(`${API_BASE_URL}/Auth/users`);
     return handleResponse(response);
@@ -115,23 +152,24 @@ export const api = {
 
   // --- Config ---
 
+  // 以下业务 API 全部使用 fetchWithAuth，自动携带认证头
   getCrimpingTools: async (): Promise<CrimpingTool[]> => {
-    const response = await fetch(`${API_BASE_URL}/config/tools`);
+    const response = await fetchWithAuth(`${API_BASE_URL}/config/tools`);
     return handleResponse(response);
   },
 
   getTerminalSpecs: async (): Promise<TerminalSpec[]> => {
-    const response = await fetch(`${API_BASE_URL}/config/terminals`);
+    const response = await fetchWithAuth(`${API_BASE_URL}/config/terminals`);
     return handleResponse(response);
   },
 
   getWireSpecs: async (): Promise<WireSpec[]> => {
-    const response = await fetch(`${API_BASE_URL}/config/wires`);
+    const response = await fetchWithAuth(`${API_BASE_URL}/config/wires`);
     return handleResponse(response);
   },
 
   getPullForceStandards: async (): Promise<PullForceStandard[]> => {
-    const response = await fetch(`${API_BASE_URL}/config/standards`);
+    const response = await fetchWithAuth(`${API_BASE_URL}/config/standards`);
     return handleResponse(response);
   },
 
@@ -139,7 +177,9 @@ export const api = {
 
   getOrders: async (): Promise<ProductionOrder[]> => {
     const timestamp = new Date().getTime();
-    const response = await fetch(`${API_BASE_URL}/Orders?_t=${timestamp}`);
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/Orders?_t=${timestamp}`,
+    );
     return handleResponse(response);
   },
 
@@ -148,28 +188,28 @@ export const api = {
     includeClosed: boolean = true,
   ): Promise<ProductionOrder[]> => {
     const timestamp = new Date().getTime();
-    const response = await fetch(
+    const response = await fetchWithAuth(
       `${API_BASE_URL}/Orders/orders/by-creator-employee?employeeId=${employeeId}&includeClosed=${includeClosed}&_t=${timestamp}`,
     );
     return handleResponse(response);
   },
 
   createOrder: async (order: ProductionOrder): Promise<ProductionOrder> => {
-    const response = await fetch(`${API_BASE_URL}/Orders`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/Orders`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(order),
     });
     return handleResponse(response);
   },
 
   updateOrderTool: async (orderId: string, toolNo: string): Promise<void> => {
-    // 假设后端有一个 PATCH 接口来修改工具
-    const response = await fetch(`${API_BASE_URL}/Orders/${orderId}/tool`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ toolNo }),
-    });
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/Orders/${orderId}/tool`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ toolNo }),
+      },
+    );
     return handleResponse(response);
   },
 
@@ -177,18 +217,23 @@ export const api = {
     orderId: string,
     record: InspectionRecord,
   ): Promise<void> => {
-    const response = await fetch(`${API_BASE_URL}/Orders/${orderId}/records`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(record),
-    });
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/Orders/${orderId}/records`,
+      {
+        method: "POST",
+        body: JSON.stringify(record),
+      },
+    );
     return handleResponse(response);
   },
 
   deleteRecord: async (recordId: string): Promise<void> => {
-    const response = await fetch(`${API_BASE_URL}/Orders/records/${recordId}`, {
-      method: "DELETE",
-    });
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/Orders/records/${recordId}`,
+      {
+        method: "DELETE",
+      },
+    );
     return handleResponse(response);
   },
 
@@ -199,11 +244,10 @@ export const api = {
     status: number,
     auditNote?: string,
   ): Promise<void> => {
-    const response = await fetch(
+    const response = await fetchWithAuth(
       `${API_BASE_URL}/Orders/records/${recordId}/audit`,
       {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           samples,
           auditorName,
@@ -216,11 +260,13 @@ export const api = {
   },
 
   closeOrder: async (orderId: string): Promise<void> => {
-    const response = await fetch(`${API_BASE_URL}/Orders/${orderId}/close`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(true),
-    });
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/Orders/${orderId}/close`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(true),
+      },
+    );
     return handleResponse(response);
   },
 };

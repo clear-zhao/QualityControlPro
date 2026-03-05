@@ -167,7 +167,7 @@ export const CreateOrder: React.FC<CreateOrderProps> = ({
                     <div className="flex justify-between items-start border-b border-blue-200 pb-1 mb-1">
                         <span className="font-bold text-blue-900">{selectedTerminal.name}</span>
                         <span className="text-xs bg-white px-2 py-0.5 rounded border border-blue-200 text-blue-600">
-                           {selectedTerminal.method === 1 ? '模压' : '坑压'}
+                           {selectedTerminal.methodName || `方法${selectedTerminal.method}`}
                         </span>
                     </div>
                     <p className="text-xs text-blue-600 mb-0.5">编码: {selectedTerminal.materialCode}</p>

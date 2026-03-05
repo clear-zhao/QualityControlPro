@@ -63,8 +63,14 @@ function App() {
   }, []);
 
   // 监听全局登出事件 (处理异地登录/Token过期 - 运行时)
+  // 用 ref 做防重复标志，避免多个并发 401 响应弹出多次 alert
+  const isLoggingOut = React.useRef(false);
   useEffect(() => {
     const handleForcedLogout = (e: Event) => {
+        // 防重复：多个请求同时 401 时只弹一次
+        if (isLoggingOut.current) return;
+        isLoggingOut.current = true;
+
         const customEvent = e as CustomEvent;
         const msg = customEvent.detail || "您的账号已在其他设备登录或会话已过期，请重新登录。";
         // 如果当前有用户登录(或本地有缓存)，才提示
@@ -75,6 +81,9 @@ function App() {
         sessionStorage.removeItem('qc_user_session');
         setUser(null);
         setCurrentProcess(null);
+
+        // 重置标志，允许下次登录后再次触发
+        setTimeout(() => { isLoggingOut.current = false; }, 500);
     };
 
     window.addEventListener(AUTH_LOGOUT_EVENT, handleForcedLogout);

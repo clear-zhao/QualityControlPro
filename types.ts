@@ -44,6 +44,7 @@ export interface TerminalSpec {
   name: string;
   description?: string;
   method: number; // 关键字段：用于匹配标准
+  methodName?: string; // 后端根据 CrimpingMethodDict 转换后的方法名称
   isDisabled?: boolean;
 }
 
